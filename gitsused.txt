@@ -1,0 +1,5 @@
+Everything listed here will need to be credited
+
+https://github.com/nidhaloff/deep-translator#id5
+
+https://pypi.org/project/fuzzysearch/

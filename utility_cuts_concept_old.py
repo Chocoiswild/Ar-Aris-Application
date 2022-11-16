@@ -39,7 +39,6 @@ def get_unplanned__gwp_disruptions():
     #selects only the list tags, each <li> contains a separate disruption:
         #content with <p> tag is the description of the disruption
         #content with <strong> tag contains the streets affected
-
     return disruptions
 
 # Returns a list of planned water outages
@@ -58,7 +57,7 @@ def main():
     planned_gwp_disruptions = get_planned_gwp_disruptions()
     for d in planned_gwp_disruptions:
         print(d.get_text())
-    print()
+    print("UNPLANNED")
     for d in unplanned_gwp_disruptions:
         print(d.get_text())
 
@@ -75,7 +74,7 @@ def main():
     if len(filtered_disruptions) == 0:
         print("Huzzah, You may bathe to your heart's content this day")
         # If no disruptions found, end program.
-        return
+        # return
     elif len(filtered_disruptions) == 1:
         print("1 disruption found")
     else:

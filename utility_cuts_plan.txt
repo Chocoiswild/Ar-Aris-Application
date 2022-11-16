@@ -1,0 +1,81 @@
+CS50 Final Project: Utility Cuts
+
+Project overview: 
+A website that allows a user to enter a street name and get notified
+when there is a utility cut there.
+
+The utility cuts will be obtained by scraping the utility cut's websites,
+and then parsing the page's information for the relevant cuts. 
+The outages are stored in a local database, and the web-scraping runs multiple times daily.
+
+Broken into parts:
+	Front-end: 
+	This does not need to be complex. In fact, the cleaner, the better.
+
+	Back-end: 
+	This merely needs to save the street and email address from the website's form.
+
+	Scraping script:
+	This will be run multiple times a day to save utility cuts to a db.
+	
+	Emailing script:
+	When a new cut is added to the db, this will cross-reference to list of emails and streets,
+	and email the cut description
+	
+
+Databases:
+	User database:
+	Stores key:value street names and emails
+	
+	Utility cut database:
+	Stores utility cuts
+	TODO: figure out what exactly needs storing.
+	
+	
+In depth:
+	Scraping:
+		How exactly will this operate?
+		I envision it 
+		
+	Automation:
+		How will the scraping program run regularly? Heroku used to be something
+		
+		
+		
+Scraper: Completed to the point that it scrapes all data and saves it to a database providing it is a new disruption
+	GWP
+		GWP unplanned outages/urgent works are located at:	https://www.gwp.ge/ka/gadaudebeli/
+			This URL lists all urgent works within a table with class="table samushaoebi" (samushaoebi = works)
+				/table/tbody/tr/td/	<a href="/ka/gadaudebeli/4949-tbilisis-zogiert-quchas-tskhalmomarageba-sheezghudeba" rel="external">
+				for tr in /table/tbody look in /td for the a tag href
+				
+				
+		GWP planned outages are located at: https://www.gwp.ge/ka/dagegmili
+			This URL also lists works within a table with class="table samushaoebi"
+				/table/tbody/tr/td/<a href="/ka/dagegmili/2972-jivipi-26-oqtombers-krtsanisis-raionshi-gadaertebit-samushaoebs-chaatarebs" rel="external">
+				
+		Notes on GWP: 
+			ALL GWP outages will need to be translated. Q whether to translate then store, or store in Georgian for consistency
+			URLS for outages are unique. Therefore can store URL in DB along with the outage. If URL NOT in DB, scrape and save to DB. Else stop scraping.
+
+	
+	TELASI
+		Notes on Telasi:
+			It appears that Telasi's outages are also generated server-side. JS is just used to collapse the dropdown menu. 
+			A similar but slightly different script will be needed to scrape Telasi's outages.
+			
+		All outages located at http://www.telasi.ge/ge/power/[outage_id]
+			ignore first two paragraphs (p[1] p[2])
+			outage located at p[odd nums] from p[3] onwards.
+			e.g. /html/body/div[2]/div/div/div/div/div/article/div/div/div/p[3]/font/font/text()
+			
+			
+			
+			
+	Front end:
+		input validation:
+			User types street, list of compatible streets in db are shown. user selects street and submits form.
+			This will prevent user from inputting a street name with a typo.
+
+			alternatively, use RE/SQL to check for streets LIKE the one user inputs.
+			
