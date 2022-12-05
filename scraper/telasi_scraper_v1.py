@@ -2,8 +2,8 @@
 # ones to a DB.
 import requests
 from bs4 import BeautifulSoup
-from deep_translator import GoogleTranslator
-from scraper_helpers import disruption_saved, save_to_db, scrape_and_save
+
+from scraper_helpers import scrape_and_save
 
 def latest_disruption_urls(url: str):
     """Extracts the latest planned and unplanned disruption URLS"""

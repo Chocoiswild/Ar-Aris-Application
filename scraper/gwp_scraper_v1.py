@@ -4,8 +4,7 @@
 
 import requests
 from bs4 import BeautifulSoup
-from scraper_helpers import disruption_saved, save_to_db, scrape_and_save
-from deep_translator import GoogleTranslator
+from scraper_helpers import scrape_and_save
 
 def latest_disruption_urls(url: str):
     """Extracts the latest disruption URLS"""
@@ -46,13 +45,16 @@ def get_unplanned_gwp_disruptions(url: str):
     response = requests.get(url)
     text = response.text
     soup = BeautifulSoup(text, "html.parser")
+    
+    # Get the announcement for all disruptions
+    announcement = soup.find("p", class_="media-heading").get_text()
 
     # extract a PageElement of only the disruptions, which are found in <div class="initial">
     # selects only the list tags, each <li> contains a separate disruption:
     disruptions = soup.find("div", "initial").find_all("li")
 
     # store the text from disruptions to a variable
-    disruption_texts = [d.get_text() for d in disruptions]
+    disruption_texts = [announcement + "\n" + d.get_text() for d in disruptions]
     return disruption_texts
 
 

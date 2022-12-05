@@ -1,7 +1,6 @@
 """Used to extract Tbilisi's street names from https://www.getpostalcodes.com/georgia/pplace-tbilisi-tbilisi/"""
 
 
-from transliterate import get_translit_function
 import requests
 from bs4 import BeautifulSoup
 streets = []

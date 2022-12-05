@@ -12,11 +12,17 @@ Broken into parts:
 	Front-end: 
 	This does not need to be complex. In fact, the cleaner, the better.
 
+	Simple version complete
+
 	Back-end: 
 	This merely needs to save the street and email address from the website's form.
 
+	todo: implement on real server
+
 	Scraping script:
 	This will be run multiple times a day to save utility cuts to a db.
+
+	running locally. todo: implement on real server
 	
 	Emailing script:
 	When a new cut is added to the db, this will cross-reference to list of emails and streets,

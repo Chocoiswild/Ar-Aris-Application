@@ -7,6 +7,9 @@ from email.message import EmailMessage
 from decouple import config
 
 
+# TODO: change server to postgresql
+
+
 # Checks if url is in db
 def disruption_saved(url: str):
     """Returns True if disruption's URL found in db"""
@@ -48,41 +51,55 @@ def save_to_db(url: str, disruption_text: str):
 
 def translate_disruption(disruption_text):
     """Translates text piecemeal if over character limit, otherwise just translates"""
-    if len(disruption_text) > 4000:
-        # Split disruption_text into paragraphs
-        paragraphs = disruption_text.split("\n")
-        # Create list to store translated paragraphs
-        translated_paragraphs = []
-        # Iterate over paragraphs
-        for p in paragraphs:
-            if len(p) == 0:
-                translated_paragraphs.append("\n")
-            # Split paragraphs into sentences
-            sentences = p.split(".")
-            # Translated sentences
-            translated_sentences = GoogleTranslator(source='ka', target='en').translate_batch(sentences)
-            # Join translated sentences together to form translated paragraph
-            translated_p = "".join(translated_sentences)
-            # Add translated paragraph to list
-            translated_paragraphs.append(translated_p)
-        # Join translated paragraphs together to form translated disruption_text
-        translated_disruption_text = "\n".join(translated_paragraphs)
-        
+    translator = GoogleTranslator(source='auto', target='english')
+    try:
+        if len(disruption_text) > 2000:
 
-    else: 
-        translated_disruption_text = GoogleTranslator(source='ka', target='en').translate(disruption_text)
-    return translated_disruption_text            
+            # Translation setup for Telasi
+            if "ელ.მომარაგების" in disruption_text or "ელექტრო" in disruption_text:
+                # Split disruption_text into paragraphs
+                paragraphs = disruption_text.split("\n")
+                # Create list to store translated paragraphs
+                translated_paragraphs = []
+                # Iterate over paragraphs
+                for p in paragraphs:
+                    # Split paragraphs into sentences
+                    sentences = p.split(". ")
+                    # Translated sentences
+                    translated_sentences = translator.translate_batch(sentences)
+                    # Join translated sentences together to form translated paragraph
+                    translated_p = "".join(translated_sentences)
+                    # Add translated paragraph to list
+                    translated_paragraphs.append(translated_p)
+                # Join translated paragraphs together to form translated disruption_text
+                translated_disruption_text = "\n\n".join(translated_paragraphs)
 
+            else:
+                # Translation setup for GWP
+                text = disruption_text.split(", ")
+                chunks = [text[x:x+60] for x in range(0, len(text), 60)] # split list into sublists of 250 words each
+                translated_disruption_text = ""
+                for chunk in chunks:
+                    joined = ", ".join(chunk)
+                    
+                    translated_disruption_text += (translator.translate(joined))
 
+        else: 
+            translated_disruption_text = translator.translate(disruption_text)
+
+        return translated_disruption_text    
+    except:
+        print(disruption_text)
+
+            
 
 def scrape_and_save(disruption_urls: list, disruption_func ):
     """Scrapes disruption urls, translates them, and saves new disruptions to DB"""
     # Iterate over planned urls 
     for url in disruption_urls:
-        print(url)
         # If URL is not found in db, scrape URL
         if not disruption_saved(url):
-            
+            print(url)
             # Iterate over all disruptions found at target URL
             for origin_text in disruption_func(url):
                 
@@ -94,13 +111,12 @@ def scrape_and_save(disruption_urls: list, disruption_func ):
 
                 # Email affected users
                 for user in affected_users:
-                    print(url)
-                    print(user.generate_email_text())
-                    print()
-                    print()
                     email_affected_user(user)
+
                 # Save translated disruption text to database
                 save_to_db(url, translated_text)
+
+
 
 class User:
     """A class to contain information """
@@ -121,6 +137,8 @@ class User:
     def generate_email_text(self):
         return self.email_text.format(name=self.name, disruption_text=self.disruption_text)
 
+
+
 # Iterates over users in DB and emails them if the disruption affects them
 def find_affected_users(disruption_text: str):
     """Iterates over users in DB, returns User objects of affected users."""
@@ -137,7 +155,6 @@ def find_affected_users(disruption_text: str):
         disruption_streets = disruption_text.split(": ")[-1]
 
         if find_near_matches(user.streetname, disruption_text, max_l_dist=2):
-            print(find_near_matches(user.streetname, disruption_text, max_l_dist=2))
             # Add disruption text to User object
             user.disruption_text = disruption_text
             # Add User to affected user list
@@ -148,6 +165,8 @@ def find_affected_users(disruption_text: str):
     
     # Return a list of affected users
     return affected_users
+
+
 
 def email_affected_user(affected_user: User):
     # define settings
@@ -173,8 +192,6 @@ def email_affected_user(affected_user: User):
         # Cut server connection
         server.close()
     
-
-
 
 if __name__ == "__main__":
     for user in find_affected_users("saburtalo ikaltos kucha"):
