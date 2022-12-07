@@ -2,12 +2,13 @@ from flask import Flask, flash, redirect, render_template, request, session
 from flask_sqlalchemy import SQLAlchemy
 import json
 import re
+from decouple import config
 
 # Configure application
 app = Flask(__name__)
 
-# set secret key
-app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
+# set secret key, keep this secret!
+app.secret_key = config('APP_SECRET_KEY', default='')
 
 # Ensure templates are auto-relaoded
 app.config["TEMPLATES_AUTO_RELOAD"] = True
@@ -15,13 +16,14 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['SQLALCHENY_TRACK_MODIFICATIONS'] = False
 
 
-ENV = 'dev'
+ENV = 'PROD'
+
 if ENV == 'dev':
     app.debug = True
     app.config['SQLALCHEMY_DATABASE_URI']='postgresql://postgres:S92328102011@localhost/utility_scraper'
 else:
     app.debug = False
-    app.config['SQLALCHEMY_DATABASE_URI']= #this will be the DB upon deployment
+    app.config['SQLALCHEMY_DATABASE_URI']= config('DB_URL', default='')
 
 
 db=SQLAlchemy(app)

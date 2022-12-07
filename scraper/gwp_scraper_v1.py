@@ -18,7 +18,7 @@ def latest_disruption_urls(url: str):
         disruption_url = url + path.get('href')
         disruptions.append(disruption_url)
 
-    return disruptions
+    return set(disruptions)
 
 
 
@@ -59,15 +59,16 @@ def get_unplanned_gwp_disruptions(url: str):
 
 
 
-def scrape_gwp():
+def scrape_gwp(users: list, urls: list):
     """Checks gwp for new planned and unplanned disruptions,
         and saves new disruptions to a database"""
     # Extract disruption urls
     planned_urls = latest_disruption_urls("https://www.gwp.ge/ka/dagegmili")
     unplanned_urls = latest_disruption_urls("https://www.gwp.ge/ka/gadaudebeli")
+
     # Scrape planned and unplanned URLS and save new disruptions to a DB
-    scrape_and_save(planned_urls, get_planned_gwp_disruptions)
-    scrape_and_save(unplanned_urls, get_unplanned_gwp_disruptions)
+    scrape_and_save(planned_urls, get_planned_gwp_disruptions, users, urls)
+    scrape_and_save(unplanned_urls, get_unplanned_gwp_disruptions, users, urls)
 
 
 if __name__ == "__main__":

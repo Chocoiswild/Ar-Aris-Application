@@ -1,56 +1,95 @@
 # A number of helper functions for scraping utility website's outages.
 
-import sqlite3, smtplib, ssl
+import  smtplib, ssl, psycopg2
 from deep_translator import GoogleTranslator
 from fuzzysearch import find_near_matches
 from email.message import EmailMessage
 from decouple import config
 
 
-# TODO: change server to postgresql
+
+# class Disruption(db.model):
+#     __tablename__='disruptions'
+#     id = db.Column(db.Integer, primary_key=True)
+#     url = db.Column(db.String)
+#     disruption = db.Column(db.string)
+
+#     def __init__(self, url, disruption):
+#         self.url = url
+#         self.disruption = disruption
 
 
-# Checks if url is in db
-def disruption_saved(url: str):
-    """Returns True if disruption's URL found in db"""
-    # connect to the db
-    con = sqlite3.connect("utility_scraper.db")
+def get_urls():
+    """ Gets all URLS from DB """
+    # set the command for searching for matching disruptions
+    sql = "SELECT url FROM disruptions"
+    urls = []
+    con = None
+    # Attempt to find matches
+    try:
+        con = psycopg2.connect(
+            host=config('PGHOST', default=''),
+            database=config('PGDATABASE', default=''),
+            user=config('PGUSER', default=''),
+            password=config('PGPASSWORD', default=''),
+            port=config('PGPORT', default=''),
+            )
 
-    # establish cursor
-    c = con.cursor()
+        # establish cursor
+        c = con.cursor()
 
-    # get all disruptions with matching url
-    matches = c.execute("SELECT * FROM disruptions WHERE url = ?", [url])
-
-    # if no matches found, return False and closes the db
-    if matches.fetchone() is None:
+        # get all urls
+        c.execute(sql)
+        url_tuples = c.fetchall()
+        for u in url_tuples:
+            urls.append(u[0])
+        # close connections
+        c.close()
         con.close()
-        return False
-
-    # else returns True and closes db
-    con.close()
-    return True
-
-
+        return urls
+    # If error, print it
+    except(Exception, psycopg2.DatabaseError) as error:
+        print('get urls fail')
+        print(error)
+        if con is not None:
+            con.close()
 
 def save_to_db(url: str, disruption_text: str):
-    """Saves a disruption to the database"""
-    con = sqlite3.connect("utility_scraper.db")
-    c = con.cursor()    
+    """Saves a disruption to the POSTGRESQL server"""
+    print("saving disruption to db")
+    # Connection details are kept secret with Decoupler, 
+    # kept in .env file and not uploaded to git
 
-    # enter into db
-    c.execute("INSERT INTO disruptions VALUES (?, ?)", (url, disruption_text))
+    sql = "INSERT INTO disruptions (url, disruption) VALUES (%s, %s)"
+    con = None
+    try:
+        con = psycopg2.connect(
+            host=config('PGHOST', default=''),
+            database=config('PGDATABASE', default=''),
+            user=config('PGUSER', default=''),
+            password=config('PGPASSWORD', default=''),
+            port=config('PGPORT', default=''),
+            )
+        c = con.cursor()    
+        # enter into db
+        c.execute(sql, (url, disruption_text))
+        # commit to db
+        con.commit()
+        # close the cursor
+        c.close()
+        # close the db
 
-    # commit to db
-    con.commit()
-
-    # close the db
-    con.close()
-
+    except(Exception, psycopg2.DatabaseError) as error:
+        print('save to db fail')
+        print(error)
+    finally:
+        if con is not None:
+            con.close()
 
 
 def translate_disruption(disruption_text):
     """Translates text piecemeal if over character limit, otherwise just translates"""
+    print("translation disruption")
     translator = GoogleTranslator(source='auto', target='english')
     try:
         if len(disruption_text) > 2000:
@@ -93,13 +132,16 @@ def translate_disruption(disruption_text):
 
             
 
-def scrape_and_save(disruption_urls: list, disruption_func ):
+def scrape_and_save(disruption_urls: list, disruption_func, users: list, urls: list):
     """Scrapes disruption urls, translates them, and saves new disruptions to DB"""
+    print("beginning disruption scraping process")
+    # Get all users from db to prevent doubling up later
     # Iterate over planned urls 
     for url in disruption_urls:
         # If URL is not found in db, scrape URL
-        if not disruption_saved(url):
-            print(url)
+        # print(url)
+        if url not in urls:
+            print("url not saved")
             # Iterate over all disruptions found at target URL
             for origin_text in disruption_func(url):
                 
@@ -107,7 +149,7 @@ def scrape_and_save(disruption_urls: list, disruption_func ):
                 translated_text = translate_disruption(origin_text)
 
                 # Find users affected by disruption
-                affected_users = find_affected_users(translated_text)
+                affected_users = find_affected_users(translated_text, users)
 
                 # Email affected users
                 for user in affected_users:
@@ -120,13 +162,16 @@ def scrape_and_save(disruption_urls: list, disruption_func ):
 
 class User:
     """A class to contain information """
-    def __init__(self, name, email, street):
+    def __init__(self, name, email, street, postcode):
         self.name = name
         self.email = email
         # The full street name, e.g. Smith St.
         self.street = street
+        self.postcode = postcode
         # Just the name of the street itself, e.g. Smith
         self.streetname = " ".join(street.split(" ")[:-1])
+
+        
 
         # To be assigned to user if disruption found
         self.disruption_text = ""
@@ -138,37 +183,58 @@ class User:
         return self.email_text.format(name=self.name, disruption_text=self.disruption_text)
 
 
+def get_users():
+    """ Gets a list of all users from the DB """
+    # Connect to the user DB
+    sql = "SELECT * FROM users"
+    con = None
+    try:
+        con = psycopg2.connect(
+            host=config('PGHOST', default=''),
+            database=config('PGDATABASE', default=''),
+            user=config('PGUSER', default=''),
+            password=config('PGPASSWORD', default=''),
+            port=config('PGPORT', default=''),
+            )
+        c = con.cursor()    
+        # select all users
+        c.execute(sql)
+        users = c.fetchall()
+        return users
+    except(Exception, psycopg2.DatabaseError) as error:
+        print('get users fail')
+        print(error)
+    finally:
+        if con is not None:
+            con.close()
+
+    
+
 
 # Iterates over users in DB and emails them if the disruption affects them
-def find_affected_users(disruption_text: str):
+def find_affected_users(disruption_text: str, users: list):
     """Iterates over users in DB, returns User objects of affected users."""
-    # Connect to the user DB
-    con = sqlite3.connect("utility_scraper.db")
-    c = con.cursor()
-
-    # Create User objects from users in DB
+    print('finding affected users')
     affected_users = []
-    for u in c.execute("SELECT * FROM users"):
-        # Users are stored in db as (name, email, street, suburb)
-        user = User(u[0], u[1], u[2])
+    for u in users:
+        print(u)
+        # Users are stored in db as (name, email, street, postcode)
+        user = User(u[1], u[2], u[3], u[4])
         # Use fuzzysearch to find matches to streetname in disruption
-        disruption_streets = disruption_text.split(": ")[-1]
 
         if find_near_matches(user.streetname, disruption_text, max_l_dist=2):
             # Add disruption text to User object
             user.disruption_text = disruption_text
-            # Add User to affected user list
+                # Add User to affected user list
             affected_users.append(user)
 
-    # Disconnect from the database
-    con.close()
-    
-    # Return a list of affected users
     return affected_users
 
 
 
 def email_affected_user(affected_user: User):
+    """ Emails the disruption notification to affected users """
+    print('emailing affected users')
     # define settings
     port = 465
     email_sender = config('EMAIL_USER', default='')
@@ -194,6 +260,4 @@ def email_affected_user(affected_user: User):
     
 
 if __name__ == "__main__":
-    for user in find_affected_users("saburtalo ikaltos kucha"):
-        print(user.email)
-        email_affected_user(user)
+    print(get_urls())

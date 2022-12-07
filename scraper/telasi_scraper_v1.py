@@ -81,13 +81,13 @@ def get_unplanned_tel_disruptions(url: str):
 
 
 
-def scrape_telasi():
+def scrape_telasi(users: list, urls: list):
     """Checks telasi for new disruptions, and saves them to a db"""
     # Extract disruption URLs
     unplanned, planned = latest_disruption_urls("http://www.telasi.ge/ge/power")
     # Scrape planned and unplanned URLs and save new disruptions to the db
-    scrape_and_save(planned, get_planned_tel_disruptions)
-    scrape_and_save(unplanned, get_unplanned_tel_disruptions)
+    scrape_and_save(planned, get_planned_tel_disruptions, users, urls)
+    scrape_and_save(unplanned, get_unplanned_tel_disruptions, users, urls)
 
 
 if __name__ == "__main__":
