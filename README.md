@@ -24,3 +24,6 @@ The [Ar Aris: Application](https://github.com/Chocoiswild/Ar-Aris-Application) h
 
 - Install Python requirements `pip install -r requirements.txt`
 - Run scraper_app.py
+
+
+This project was created for Harvard's CS50X final project.
