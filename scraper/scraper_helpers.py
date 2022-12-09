@@ -7,18 +7,6 @@ from email.message import EmailMessage
 from decouple import config
 
 
-
-# class Disruption(db.model):
-#     __tablename__='disruptions'
-#     id = db.Column(db.Integer, primary_key=True)
-#     url = db.Column(db.String)
-#     disruption = db.Column(db.string)
-
-#     def __init__(self, url, disruption):
-#         self.url = url
-#         self.disruption = disruption
-
-
 def get_urls():
     """ Gets all URLS from DB """
     # set the command for searching for matching disruptions
@@ -89,7 +77,7 @@ def save_to_db(url: str, disruption_text: str):
 
 def translate_disruption(disruption_text):
     """Translates text piecemeal if over character limit, otherwise just translates"""
-    print("translation disruption")
+    print("translating disruption")
     translator = GoogleTranslator(source='auto', target='english')
     try:
         if len(disruption_text) > 2000:
@@ -134,14 +122,14 @@ def translate_disruption(disruption_text):
 
 def scrape_and_save(disruption_urls: list, disruption_func, users: list, urls: list):
     """Scrapes disruption urls, translates them, and saves new disruptions to DB"""
-    print("beginning disruption scraping process")
+    print("Scraping urls...")
     # Get all users from db to prevent doubling up later
     # Iterate over planned urls 
     for url in disruption_urls:
         # If URL is not found in db, scrape URL
         # print(url)
         if url not in urls:
-            print("url not saved")
+            print("url not yet saved")
             # Iterate over all disruptions found at target URL
             for origin_text in disruption_func(url):
                 
@@ -177,7 +165,7 @@ class User:
         self.disruption_text = ""
 
         # A template for generating email text
-        self.email_text = "Hi {name},\n\nYour street has been included in a list of streets affected by a utility disruption in Tbilisi.\nPlease see the following announcement for more details:\n\n{disruption_text}"
+        self.email_text = "Hi {name},\n\nYour street has been included in a list of streets affected by a utility disruption in Tbilisi.\nPlease see the following announcement for more details:\n\n{disruption_text}\n\n\nIf you believe you have recieved this email in error, or your street is not included in this disruption, please reply to this email."
 
     def generate_email_text(self):
         return self.email_text.format(name=self.name, disruption_text=self.disruption_text)
@@ -217,7 +205,6 @@ def find_affected_users(disruption_text: str, users: list):
     print('finding affected users')
     affected_users = []
     for u in users:
-        print(u)
         # Users are stored in db as (name, email, street, postcode)
         user = User(u[1], u[2], u[3], u[4])
         # Use fuzzysearch to find matches to streetname in disruption
