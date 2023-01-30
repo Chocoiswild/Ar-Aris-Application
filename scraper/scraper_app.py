@@ -25,7 +25,5 @@ while 1:
     schedule.run_pending()
 
 
-# scrape_utilities()
-
 # if __name__ == "__main__":
 #     scrape_utlities()

@@ -139,9 +139,9 @@ def scrape_and_save(disruption_urls: list, disruption_func, users: list, urls: l
                 affected_users = find_affected_users(translated_text, users)
 
                 # Email affected users
-                #TODO: re-enable this feature!
-                # for user in affected_users:
-                #     email_affected_user(user)
+
+                for user in affected_users:
+                    email_affected_user(user)
 
                 # Save translated disruption text to database
                 save_to_db(url, translated_text)
