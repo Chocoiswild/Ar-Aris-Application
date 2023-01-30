@@ -4,19 +4,18 @@ from scraper_helpers import get_urls, get_users
 import time, schedule
 def scrape_utilities():
     # Get users and urls from database here, as it only needs to be done once per runtime
-    print('Starting up webscraper')
+    print('Starting up webscraper''\n')
     db_users = get_users()
     db_urls = get_urls()
     scrape_gwp(db_users, db_urls)
     scrape_telasi(db_users, db_urls)
     print()
-    print('dingdindingdingdingding!')
-    print('Scraping completed')
+    print('Scraping completed''\n')
     print()
 
+# Run script every hour
 schedule.every(1).hours.do(scrape_utilities)
-# schedule.every().hour.do(job)
-# schedule.every().day.at("10:30").do(job)
+
 
 while 1:
     schedule.run_pending()
