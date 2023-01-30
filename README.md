@@ -1,6 +1,6 @@
 ---
 title: Ar Aris Application
-description: An application that scrapes the power and water companies in Tbilisi, Georgia and notifies users registered via the Ar Aris WebApp if their street is affected by disruptions.
+description: An application that scrapes Tbilisi, Georgia's power and water companies websites and notifies users registered via the Ar Aris WebApp if their street is affected by disruptions.
              
 tags:
   - python
