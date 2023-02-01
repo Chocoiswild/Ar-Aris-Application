@@ -1,11 +1,10 @@
-# A number of helper functions for scraping utility website's outages.
+# Helper functions for the Ar Aris scraper.
 
 import  smtplib, ssl, psycopg2
 from deep_translator import GoogleTranslator
 from fuzzysearch import find_near_matches
 from email.message import EmailMessage
 from decouple import config
-
 
 def get_urls():
     """ Gets all URLS from DB """
@@ -147,16 +146,15 @@ def scrape_and_save(disruption_urls: list, disruption_func, users: list, urls: l
                 save_to_db(url, translated_text)
 
 
-
 class User:
-    """A class to contain information """
-    def __init__(self, name, email, street, postcode):
+    """A class to contain user information """
+    def __init__(self, name, email, street, district):
         self.name = name
         self.email = email
         # The full street name, e.g. Smith St.
         self.street = street
-        self.postcode = postcode
-        # Just the name of the street itself, e.g. Smith
+        self.district = district
+        # Just the name of the street itself, e.g. Smith, not Smith st.
         self.streetname = " ".join(street.split(" ")[:-1])
 
         
@@ -205,14 +203,27 @@ def find_affected_users(disruption_text: str, users: list):
     print('finding affected users')
     affected_users = []
     for u in users:
-        # Users are stored in db as (name, email, street, postcode)
+        user_affected = False
+        # Users are stored in db as (name, email, street, district)
         user = User(u[1], u[2], u[3], u[4])
-        # Use fuzzysearch to find matches to streetname in disruption
+        # Use fuzzysearch to find matches to district and streetname in disruption
+        # Filter by district due to duplicate street names
+        if find_near_matches(user.district, disruption_text, max_l_dist=2):
+            # Tbilisi streetnames are a mess, and they're not always written in full in disruptions
+            street_parts = user.streetname.split(" ")
+            # If the street has two names (e.g. Ivane Machabeli), it is known by second name
+            # Filtering by district should avoid any complications filtering like this may turn up
+            if len(street_parts) == 2:
+                if find_near_matches(street_parts[1], disruption_text, max_l_dist=2):
+                    user_affected = True
+            # Any other streetname can be searched in full
+            elif find_near_matches(user.streetname, disruption_text, max_l_dist=2):
+                    user_affected = True
 
-        if find_near_matches(user.streetname, disruption_text, max_l_dist=2):
-            # Add disruption text to User object
+        # if user is affected, set disruption text to User object
+        if user_affected == True:
             user.disruption_text = disruption_text
-                # Add User to affected user list
+            # Add User to affected user list
             affected_users.append(user)
 
     return affected_users

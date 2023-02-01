@@ -71,6 +71,4 @@ def scrape_gwp(users: list, urls: list):
     scrape_and_save(unplanned_urls, get_unplanned_gwp_disruptions, users, urls)
 
 
-if __name__ == "__main__":
-    scrape_gwp()
 
