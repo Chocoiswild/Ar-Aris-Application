@@ -5,6 +5,17 @@ from deep_translator import GoogleTranslator
 from fuzzysearch import find_near_matches
 from email.message import EmailMessage
 from decouple import config
+import hashlib
+
+def generate_hash(string: str):
+    """A simple function to generate and return hashes from strings"""
+    bytestring = bytes(string, 'utf-8')
+    m = hashlib.sha256()
+    m.update(bytestring)
+    
+    return m.hexdigest()
+
+
 
 def get_urls():
     """ Gets all URLS from DB """
