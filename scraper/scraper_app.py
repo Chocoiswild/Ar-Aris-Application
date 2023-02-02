@@ -17,8 +17,8 @@ def scrape_utilities():
     mydb.close_connection()
     print()
 
-# Run script every hour
-schedule.every(1).hours.do(scrape_utilities)
+# Run script 30 minutes
+schedule.every(30).minutes.do(scrape_utilities)
 
 
 while 1:
