@@ -19,7 +19,6 @@ class User:
         self.streetname = " ".join(street.split(" ")[:-1])
         # To be assigned to user if disruption found
         self.disruption_text = ""
-
         # A template for generating email text
         self.email_text = "Hi {name},\n\nYour street has been included in a list of streets affected by a utility disruption in Tbilisi.\nPlease see the following announcement for more details:\n\n{disruption_text}\n\n\nIf you believe you have recieved this email in error, or your street is not included in this disruption, please reply to this email."
 
@@ -221,14 +220,12 @@ def email_affected_user(affected_user: User):
     with smtplib.SMTP_SSL("smtp.gmail.com", port, context=context) as server:
         # Login to the server
         server.login(email_sender, email_password)
-
         # Generate email message
         message = EmailMessage()
         message.set_content(affected_user.generate_email_text())
         message["subject"] = "Your street has a utility disruption!"
         message["from"] = email_sender
         message["to"] = affected_user.email
-
         # Send email
         server.send_message(message)
         # Cut server connection
