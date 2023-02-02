@@ -7,7 +7,9 @@ def scrape_utilities():
     print('Starting up webscraper''\n')
     db_users = get_users()
     db_urls = get_urls()
+    print("Scraping GWP")
     scrape_gwp(db_users, db_urls)
+    print("Scraping Telasi")
     scrape_telasi(db_users, db_urls)
     print()
     print('Scraping completed''\n')
@@ -25,5 +27,5 @@ while 1:
     schedule.run_pending()
 
 
-# if __name__ == "__main__":
-#     scrape_utlities()
+if __name__ == "__main__":
+    scrape_utilities()
