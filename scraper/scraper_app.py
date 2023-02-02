@@ -1,18 +1,20 @@
 from telasi_scraper_v1 import scrape_telasi
 from gwp_scraper_v1 import scrape_gwp
-from scraper_helpers import get_urls, get_users
+from scraper_helpers import get_urls, get_users, Database
 import time, schedule
 def scrape_utilities():
-    # Get users and urls from database here, as it only needs to be done once per runtime
     print('Starting up webscraper''\n')
-    db_users = get_users()
-    db_urls = get_urls()
+    # Establish connection to database through a Database object
+    mydb = Database()
+    db_users = get_users(mydb)
+    db_urls = get_urls(mydb)
     print("Scraping GWP")
-    scrape_gwp(db_users, db_urls)
+    scrape_gwp(mydb, db_users, db_urls)
     print("Scraping Telasi")
-    scrape_telasi(db_users, db_urls)
+    scrape_telasi(mydb, db_users, db_urls)
     print()
     print('Scraping completed''\n')
+    mydb.close_connection()
     print()
 
 # Run script every hour

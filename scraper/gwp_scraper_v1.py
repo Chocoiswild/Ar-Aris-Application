@@ -4,7 +4,7 @@
 
 import requests
 from bs4 import BeautifulSoup
-from scraper_helpers import scrape_and_save
+from scraper_helpers import scrape_and_save, Database
 
 def latest_disruption_urls(url: str):
     """Extracts the latest disruption URLS"""
@@ -59,7 +59,7 @@ def get_unplanned_gwp_disruptions(url: str):
 
 
 
-def scrape_gwp(users: list, urls: list):
+def scrape_gwp(database: Database, users: list, urls: list):
     """Checks gwp for new planned and unplanned disruptions,
         and saves new disruptions to a database"""
     # Extract disruption urls
@@ -67,8 +67,8 @@ def scrape_gwp(users: list, urls: list):
     unplanned_urls = latest_disruption_urls("https://www.gwp.ge/ka/gadaudebeli")
 
     # Scrape planned and unplanned URLS and save new disruptions to a DB
-    scrape_and_save(planned_urls, get_planned_gwp_disruptions, users, urls)
-    scrape_and_save(unplanned_urls, get_unplanned_gwp_disruptions, users, urls)
+    scrape_and_save(database, planned_urls, get_planned_gwp_disruptions, users, urls)
+    scrape_and_save(database, unplanned_urls, get_unplanned_gwp_disruptions, users, urls)
 
 
 
