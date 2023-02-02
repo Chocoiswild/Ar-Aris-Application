@@ -181,7 +181,8 @@ def find_affected_users(disruption_text: str, users: list):
         # Use fuzzysearch to find matches to district 
         # and streetname in disruption
         # Filter by district due to duplicate street names
-        if find_near_matches(user.district, disruption_text, max_l_dist=2):
+        district_name = user.district + " district"
+        if find_near_matches(district_name, disruption_text, max_l_dist=2):
             # Tbilisi streetnames are a mess, and they're not 
             # always written in full in disruptions
             street_parts = user.streetname.split(" ")
@@ -240,6 +241,7 @@ def process_disruptions(database: Database, url: str, disruptions: list,
     print("processing disruptions")
     for d in disruptions:
         hash = generate_hash(d)
+        print(hash)
         add_disruption = True
 
         # If False, the URL exists in the DB and the page has been updated
@@ -251,6 +253,7 @@ def process_disruptions(database: Database, url: str, disruptions: list,
                 add_disruption = False
 
         if add_disruption:
+            print(url)
             # Translate text to English
             translated_text = translate_disruption(d)
             # Find users affected by disruption
