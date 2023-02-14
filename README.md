@@ -26,4 +26,8 @@ The [Ar Aris: Application](https://github.com/Chocoiswild/Ar-Aris-Application) h
 - Run scraper_app.py
 
 
-This project was created for Harvard's CS50X final project.
+This project began as a project for Harvard's CS50X course, but quickly grew into a passion project with real-world implications.
+
+
+Credit:
+The [magtifun api](https://github.com/Tornike-Skhulukhia/magtifun_api) is thanks to Tornike Skhulukhia.
