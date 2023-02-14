@@ -1,9 +1,9 @@
 # Scrapes the telasi electricty website for disruptions and saves new
 # ones to a DB.
-import requests
+import requests, re
 from bs4 import BeautifulSoup
 
-from scraper_helpers import scrape_and_save, Database
+from scraper_helpers import scrape_and_save, Database, Disruption
 
 def latest_disruption_urls(url: str):
     """Extracts the latest planned and unplanned disruption URLS"""
@@ -14,7 +14,7 @@ def latest_disruption_urls(url: str):
     # Extract disruptions to a list
     unplanned_urls = []
     planned_urls = []
-    for d in soup.find("nav", class_="power-submenu").findAll("a"):
+    for d in soup.select_one("nav.power-submenu").select("a"):
         # get url, remove duplicate substring from path
         path = d.get("href").replace("ge/power/", "")
         disruption_url = disruption_url = url + path
@@ -37,13 +37,13 @@ def get_planned_tel_disruptions(url: str):
     soup = BeautifulSoup(text, "html.parser")
 
     # Get the announcement for all disruptions from this URL
-    announcement = soup.find("h3").get_text()
+    announcement = soup.select_one("h3").get_text()
 
     # Create empty list to store disruption texts
-    disruption_texts = []
+    disruptions = []
 
     # extract all paragraphs, these contain disruptions and suburb names (first <p> is always blank)
-    paragraphs = soup.find("div", class_="field-items").findAll("p")[:-1]
+    paragraphs = soup.select_one("div.field-items").select("p")[:-1]
     
     # Set suburb name variable
     suburb = paragraphs[0].get_text()
@@ -60,11 +60,11 @@ def get_planned_tel_disruptions(url: str):
 
         # Else if it's greater, it contains the disruption text
         elif len(text) > 50:
-            # So create the full disruption text to save to db
-            disruption_text = announcement + "\n" + suburb + "\n" + text
-            disruption_texts.append(disruption_text)
+            # so initialise the Disruption object, and add it to the Disruptions list
+            disruption_text = suburb + ":" + "\n\n" + text
+            disruptions.append(Disruption(disruption_text.strip(), announcement.strip(), "Electricity", url))
 
-    return  disruption_texts
+    return  disruptions
 
 
 
@@ -74,10 +74,22 @@ def get_unplanned_tel_disruptions(url: str):
     text = response.text
     soup = BeautifulSoup(text, "html.parser")
 
-    # Extract text from page
-    disruption = [soup.find("div", class_="field-items").get_text()]
+    # Extract relevant divs from html to parse
+    divs = soup.select_one("div.field-items")
     
-    return disruption
+    # Sometimes text is within <h3> tags, sometimes <p> tags
+    # Why? This is Georgia
+    if divs.select_one("h3"):
+        disruption =  divs.select("h3")
+    else:
+        disruption =  divs.select("p")
+
+    # First line is always the announcement
+    announcement = disruption[0].text
+    disruption_text = "".join([d.get_text() for d in disruption[1:]])
+
+    return [Disruption(disruption_text.strip(), announcement.strip(), "Electricity", url)]
+
 
 
 
@@ -91,5 +103,14 @@ def scrape_telasi(database: Database, users: list, urls: list):
 
 
 if __name__ == "__main__":
-    scrape_telasi()
+    unplanned, planned = latest_disruption_urls("http://www.telasi.ge/ge/power")
+    for u in planned:
+
+        ds = get_planned_tel_disruptions(u)
+        for d in ds:
+            print(d.announcement_ge)
+            print(d.url)
+            print(len(d.text_ge))
+
+        print(50*"*")
 

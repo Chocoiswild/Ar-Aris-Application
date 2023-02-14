@@ -4,7 +4,7 @@
 
 import requests
 from bs4 import BeautifulSoup
-from scraper_helpers import scrape_and_save, Database
+from scraper_helpers import scrape_and_save, Database, Disruption
 
 def latest_disruption_urls(url: str):
     """Extracts the latest disruption URLS"""
@@ -29,14 +29,17 @@ def get_planned_gwp_disruptions(url: str):
     soup = BeautifulSoup(text, "html.parser")
 
     # extract a list of disruption PageElements
-    disruptions = soup.find("div", {"class" : lambda L: L and L.endswith('news-details')}).find_all("p")
+    disruptions = soup.find("div", {"class" : lambda L: L and L.endswith('news-details')}).select("p")
 
-    # extract the text, ignoring certain unneccesary items
-    disruption_texts = [d.get_text() for d in disruptions[1:-3]]
+    # Extract the disruption announcement
+    announcement = soup.select_one("p.media-heading").select_one("span").get_text()
 
-    # Joins the disruption texts as it's all just one disruption
-    # Returns it as a single list item for the scrape_and_save function to work
-    return ["\n".join(disruption_texts)]
+    # extract the text from the paragraphs and join them together
+    disruption_text = "\n".join([d.get_text() for d in disruptions[1:-3]])
+
+    # Return a Disruption object from information gathered so far
+    # Returned as a list item to work with Scrape and Save function
+    return [Disruption(disruption_text.strip(), announcement.strip(), "Water", url)]
 
 
 
@@ -47,15 +50,16 @@ def get_unplanned_gwp_disruptions(url: str):
     soup = BeautifulSoup(text, "html.parser")
     
     # Get the announcement for all disruptions
-    announcement = soup.find("p", class_="media-heading").get_text()
+    announcement = soup.select_one("p.media-heading").select_one("span").get_text()
 
     # extract a PageElement of only the disruptions, which are found in <div class="initial">
     # selects only the list tags, each <li> contains a separate disruption:
-    disruptions = soup.find("div", "initial").find_all("li")
+    disruptions = soup.select_one("div.initial").select("li")
 
-    # store the text from disruptions to a variable
-    disruption_texts = [announcement + "\n" + d.get_text() for d in disruptions]
-    return disruption_texts
+    # Return Disruption objects for each separate disruption found
+    return [Disruption(d.get_text().strip(), announcement.strip(), "Water", url)
+            for d in disruptions]
+
 
 
 
@@ -72,3 +76,14 @@ def scrape_gwp(database: Database, users: list, urls: list):
 
 
 
+if __name__ == "__main__":
+    unplanned = latest_disruption_urls("https://www.gwp.ge/ka/gadaudebeli")
+    for u in unplanned:
+
+        ds = get_unplanned_gwp_disruptions(u)
+        for d in ds:
+            print(d.announcement_en)
+            print(d.url)
+            print(len(d.text_ge))
+
+        print(50*"*")
