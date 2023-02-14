@@ -5,28 +5,67 @@ from deep_translator import GoogleTranslator
 from fuzzysearch import find_near_matches
 from email.message import EmailMessage
 from decouple import config
+from magtifun_oop import MagtiFun
 import hashlib
+import re
+
+class Disruption:
+    """ A class for containing all information relating to a disruption"""
+    def __init__(self, text_ge, announcement_ge, utility, url):
+        self.text_ge = text_ge
+        self.announcement_ge = announcement_ge
+        self.url = url
+        self.utility = utility
+
+        self.hash = ""
+        self.text_en = ""
+        self.announcement_en = ""
+        self.time = ""
+
+    def process(self):
+        """Translates disruption, announcement, and extracts times"""
+        translate_disruption(self)
+        self.time = extract_times(self.text_en)
+
 
 class User:
     """A class for creating User objects"""
-    def __init__(self, name, email, street, district):
+    def __init__(self, name, email, street, district, phone=None):
         self.name = name
         self.email = email
+        self.phone = phone
         # The full street name, e.g. Smith St.
         self.street = street
         self.district = district
         # Just the name of the street itself, e.g. Smith, not Smith st.
         self.streetname = " ".join(street.split(" ")[:-1])
-        # To be assigned to user if disruption found
-        self.disruption_text = ""
+
         # A template for generating email text
-        self.email_text = "Hi {name},\n\nYour street has been included in a list of streets affected by a utility disruption in Tbilisi.\nPlease see the following announcement for more details:\n\n{disruption_text}\n\n\nIf you believe you have recieved this email in error, or your street is not included in this disruption, please reply to this email."
+        self.email_subject = "{utility} outage {disruption_time}: {announcement}"
+        self.email_text = "Hi {name},\n\n{street} has been included in a list of streets affected by a utility disruption in Tbilisi.\nPlease see the following announcement for more details:\n\n{disruption_text}\n\n\nIf you believe you have recieved this email in error, or your street is not included in this disruption, please reply to this email."
+        self.text_message = "{utility} outage on {street} {disruption_time}:\n{announcement}\nMore info: {url}"
 
-    def generate_email_text(self):
-        return self.email_text.format(name=self.name, 
-                                    disruption_text=self.disruption_text)
+    def generate_communications(self, disruption: Disruption):
+        """Populates email and text message content"""
+        self.email_subject = self.email_subject.format(
+                                    utility=disruption.utility,
+                                    announcement=disruption.announcement_en,
+                                    disruption_time=disruption.time
+                                    )
+        self.email_text = self.email_text.format(
+                                    name=self.name, 
+                                    street=self.street,
+                                    disruption_text=disruption.text_en
+                                    )
+        self.text_message = self.text_message.format(
+                                                    utility=disruption.utility, 
+                                                    street=self.street, 
+                                                    disruption_time=disruption.time, 
+                                                    announcement=disruption.announcement_en, 
+                                                    url=disruption.url
+                                                     )
 
-
+        
 
 class Database():
     """Connects and handles the various SQL queries"""
@@ -45,25 +84,86 @@ class Database():
             print(error)
 
     def fetch(self, query, parameters):
+        """Returns the results of a database query"""
         with self.con.cursor() as c:
             c.execute(query, (parameters))
             return c.fetchall()
 
     def save(self, query, parameters):
+        """ Saves information to a database """
         with self.con.cursor() as c:
             c.execute(query, (parameters))
         self.con.commit()
     
     def close_connection(self):
+        """Kills the connection to the database,
+        use when Database object no longer needed"""
         self.con.close()
+
+
+
+def text_user(user: User):
+    """Texts a disruption notification to a user"""
+    m = MagtiFun(username=config('M_USER', default=''),
+                              password=config('M_PW', default=''))
+    print(f"texting {user.name}")
+    if m.login():
+        print("Authentication successful")
+
+        m.get_balance()
+        print("balance:", m.balance)
+
+        if m.send_messages(user.phone, user.text_message):
+            print("All messages sent successfully")
+        else:
+            print("Some messages could not be sent. Check the log for more details")
+            print(m.log_file)
+
+    else:
+        print("Authentication unsuccessful")
+
+
+def extract_times(disruption_text: str):
+    """Extracts and returns the disruption's times, if possible. 
+        Otherwise, returns NULL"""
+    # Bar a few rare outliers, all dates and times in disruption texts
+    # can be found with the following patterns
+    p1 = "from\s(?P<time_from>\d{1,2}:\d{2}\s(a|p)\.m\.)\sto\s(?P<time_to>\d{1,2}:\d{2}\s(a|p)\.m\.)"
+    p2 = "from\s\d{2}\/\d{2}\s(?P<time_from>\d{2}:\d{2})\sto\s\d{2}\/\d{2}\s(?P<time_to>\d{2}:\d{2})"
+    p3 = "from\s(?P<time_from>\d{2}:\d{2})\sto\s(?P<time_to>\d{2}:\d{2})"
+    p4 = "\d{2}\.\d{2}\.\d{4}\.?\s(?P<time_to>\d{1,2}:\d{2}\s(a|p)\.m\.)"
+    p5 = "from\s(?P<time_from>\d{2}:\d{2})\son\s[A-Z][a-z]{3,8}\s\d{1,2}\sto\s(?P<time_to>\d{2}:\d{2})\son\s[A-Z][a-z]{3,8}\s\d{1,2}"
+
+    # Patterns cannot be joined and searched all at once, 
+    # due to the usage of named groups e.g. (?P<time_to>) in each pattern
+    # If workaround is found, use below:
+        # search_patterns = '(' + ')|('.join([p1, p2, p3, p4, p5]) + ')'
+
+    # Check all patterns for matches within text
+    for p in [p1, p2, p3, p4, p5]:
+        matched = False
+        match =  re.search(p, disruption_text)
+        if match:
+            matched = True
+            if "time_from" not in p:
+                times = f"until {match.group('time_to')}"
+            else:
+                times = f"from {match.group('time_from')} to {match.group('time_to')}"
+
+            return times
+        # If there are no matches found, it's an outlier
+    if not matched:
+        times = ""
+    return times
 
 
 
 def get_users(database: Database):
     """Retrieves a list of all users from the DB"""
     sql = "SELECT * FROM users"
-    users = database.fetch(sql, ())
-    return users
+    db_users = database.fetch(sql, ())
+
+    return [User(u[1], u[2], u[3], u[4], u[5]) for u in db_users]
 
 
 
@@ -95,12 +195,11 @@ def get_disruption_hashes(database: Database, url: str):
 
 
 
-def save_disruption(database: Database, url: str, 
-                    disruption_text: str, hash: str):
+def save_disruption(database: Database, disruption: Disruption):
     """Saves a disruption to the POSTGRESQL database"""
     print("saving new disruption to db")
     sql = "INSERT INTO disruptions (url, text, hash) VALUES (%s, %s, %s)"
-    database.save(sql, (url, disruption_text, hash))
+    database.save(sql, (disruption.url, disruption.text_en, disruption.hash))
 
 
 
@@ -118,20 +217,20 @@ def save_url(database: Database, url: str, hash: str, url_exists: bool):
 
 
 
-def translate_disruption(disruption_text: str):
-    """Translates given text from Georgian to English"""
+def translate_disruption(disruption: Disruption):
+    """Translates given disruption's annoucement and text to English"""
     print("translating disruption")
     # Initiate the translator object here so it's done just once
     translator = GoogleTranslator(source='auto', target='english')
     # Translator can only handle so many characters at once. 
-    if len(disruption_text) > 2000:
+    if len(disruption.text_ge) > 2000:
         # Telasi and GWP's texts are formatted differently, 
         # so they need to be broken up in different ways for translation.
         # For Telasi
-        if "ელ.მომარაგების" in disruption_text or "ელექტრო" in disruption_text:
+        if "ელ.მომარაგების" in disruption.text_ge or "ელექტრო" in disruption.text_ge:
             # Telasi texts are often long, so break into paragraphs
             # and then translate sentences within paragraphs.
-            paragraphs = disruption_text.split("\n")
+            paragraphs = disruption.text_ge.split("\n")
             translated_paragraphs = []
             for p in paragraphs:
                 # Then into sentences, then translate
@@ -144,7 +243,7 @@ def translate_disruption(disruption_text: str):
 
         else:
             # For GWP
-            text = disruption_text.split(", ")
+            text = disruption.text_ge.split(", ")
             # GWP texts are not as long, and their formatting allows a text to
             # be split into groups of 60 words which are translated.
             chunks = [text[x:x+60] for x in range(0, len(text), 60)] 
@@ -154,9 +253,10 @@ def translate_disruption(disruption_text: str):
                 translated_disruption_text += (translator.translate(joined))
     # If the text is short enough it's translated in one go.
     else: 
-        translated_disruption_text = translator.translate(disruption_text)
+        translated_disruption_text = translator.translate(disruption.text_ge)
 
-    return translated_disruption_text    
+    disruption.text_en  = translated_disruption_text
+    disruption.announcement_en = translator.translate(disruption.announcement_ge)
 
 
 
@@ -170,51 +270,53 @@ def generate_hash(string: str):
 
 
 
-def find_affected_users(disruption_text: str, users: list):
+def find_affected_users(disruption: Disruption, users: list):
     """Iterates over users in DB, returns User objects of affected users."""
     print('finding affected users')
     affected_users = []
     for u in users:
         user_affected = False
-        # Users are stored in db as (name, email, street, district)
-        user = User(u[1], u[2], u[3], u[4])
+        # Users are stored in db as (name, email, street, district, phone)
+        # user = User(u[1], u[2], u[3], u[4], u[5])
         # Use fuzzysearch to find matches to district 
         # and streetname in disruption
         # Filter by district due to duplicate street names
-        if find_near_matches(user.district, disruption_text, max_l_dist=2):
+        if find_near_matches(u.district, disruption.text_en, max_l_dist=1):
             # Tbilisi streetnames are a mess, and they're not 
             # always written in full in disruptions
-            street_parts = user.streetname.split(" ")
+            street_parts = u.streetname.split(" ")
             # If the street has two names (e.g. Ivane Machabeli), 
             # it is known by second name.
             # Filtering by district should avoid any complications 
             # filtering like this may turn up
             if len(street_parts) == 2:
-                if find_near_matches(street_parts[1], disruption_text, 
-                                     max_l_dist=2):
+                if find_near_matches(street_parts[1], disruption.text_en, 
+                                     max_l_dist=1):
                     user_affected = True
             # Any other streetname can be searched in full
-            elif find_near_matches(user.streetname, disruption_text, 
-                                   max_l_dist=2):
+            elif find_near_matches(u.streetname, disruption.text_en, 
+                                   max_l_dist=1):
                     user_affected = True
 
         # if user is affected, set disruption text to User object
         if user_affected == True:
-            user.disruption_text = disruption_text
+            print(f"User affected: {u.name}")
+            u.generate_communications(disruption)
             # Add User to affected user list
-            affected_users.append(user)
+            affected_users.append(u)
 
     return affected_users
 
 
 
-def email_affected_user(affected_user: User):
+def email_affected_user(user: User):
     """ Emails the disruption notification to affected users """
-    print('emailing affected users')
+    print(f"emailing {user.name}")
     # define settings
     port = 465
     email_sender = config('EMAIL_USER', default='')
     email_password = config('EMAIL_PW', default='')
+
     context = ssl.create_default_context()
 
     with smtplib.SMTP_SSL("smtp.gmail.com", port, context=context) as server:
@@ -222,10 +324,10 @@ def email_affected_user(affected_user: User):
         server.login(email_sender, email_password)
         # Generate email message
         message = EmailMessage()
-        message.set_content(affected_user.generate_email_text())
-        message["subject"] = "Your street has a utility disruption!"
+        message.set_content(user.email_text)
+        message["subject"] = user.email_subject
         message["from"] = email_sender
-        message["to"] = affected_user.email
+        message["to"] = user.email
         # Send email
         server.send_message(message)
         # Cut server connection
@@ -239,27 +341,31 @@ def process_disruptions(database: Database, url: str, disruptions: list,
         save it to the database and email any affected users."""
     print("processing disruptions")
     for d in disruptions:
-        hash = generate_hash(d)
+        d.hash = generate_hash(d.text_ge)
         add_disruption = True
 
         # If False, the URL exists in the DB and the page has been updated
         if new_url == False:
             # If the hash exists in the DB, the disruption hasn't been changed
             # So it doesn't need to be processed
-            if hash in get_disruption_hashes(database, url):
+            if d.hash in get_disruption_hashes(database, url):
                 print("disruption already in db")
                 add_disruption = False
 
         if add_disruption:
-            # Translate text to English
-            translated_text = translate_disruption(d)
+            # Translate disruption to English, extract disruption times
+            d.process()
             # Find users affected by disruption
-            affected_users = find_affected_users(translated_text, users)
+            affected_users = find_affected_users(d, users)
+
             # Email affected users
             for user in affected_users:
+                # If phone saved, user wants texts
+                if not user.phone == None:  
+                    text_user(user)
                 email_affected_user(user)
             # Save translated disruption text to database
-            save_disruption(database, url, translated_text, hash)
+            save_disruption(database, d)
 
 
 
@@ -277,10 +383,11 @@ def scrape_and_save(database: Database, disruption_urls: list, disruption_func,
         and saves new disruptions to DB"""
     print("Scraping urls...")
     for url in disruption_urls:
+        print(url)
         # get all disruptions from URL
         disruptions = disruption_func(url)
         # Generate a hash of outages from URL
-        url_hash = generate_hash("".join(disruptions))
+        url_hash = generate_hash("".join([d.text_ge for d in disruptions]))
         # Is URL already in DB?
         if in_list_of_dicts(urls, url):
             print("url is already in db")
@@ -300,5 +407,17 @@ def scrape_and_save(database: Database, disruption_urls: list, disruption_func,
 
 
 if __name__ == "__main__":
-    pass
+    text_ge= "საბურთალოს რაიონი\nგადაუდებელი სამუშაოების გამო 10:00 საათიდან 18:00 საათამდე შეზღუდვა შეეხება: ნუცუბიძის IV მიკრორაიონის, ყაზბეგის გამზირის (ნაწილობრივ), პეკინის გამზირის (ნაწილობრივ), საბურთალოს, თამარაშვილის, ქუთათელაძის, უნივერსიტეტის, ლორთქიფანიძის, ცინცაძის, კუტუზოვის, საირმის, მიცკევიჩის, გამრეკელის, შმიდტის, იოსებიძის, ხვიჩიას, ბახტრიონის, ფანასკერტელ-ციციშვილის, კოსტავას, ცაგარელის და იყალთოს ქუჩების მოსახლეობას.\n გადაუდებელი სამუშაოების გამო 11:00 საათიდან 18:00 საათამდე შეზღუდვა შეეხება: დიდი დიღმის I მიკრორაიონის, პეტრე იბერის, გიორგი ბრწყინვალეს და მეფე მირიანის ქუჩების მოსახლეობას."
+    announcement_ge = "სხვადასხვა სამუშაოების ჩატარების გამო 6 თებერვალს ელექტრომომარაგება დროებით შეიზღუდება"
+    d = Disruption(text_ge, announcement_ge,"Electricity", "http://www.telasi.ge/ge/power/15698")
+    test_user = User('shash', 'shashwighton@gmail.com', 'ikalto street', 'Saburtalo', '598865300')
+    test_user.generate_communications(d)
 
+    if not test_user.phone == None:
+        text_user(test_user)
+
+    # text = "Saburtalo district, water supply will be interrupted from 02/13 16:00 to 02/14 01:00 in order to carry out damage restoration works on the water pipeline network on Oseti Street: In Saburtalo district: Mukhran Machavariani, Oseti, Beritashvili streets.In the Vaki district: Amashukeli, Mary Davitashvili, Varden Tsulukidze, Varini and Nutsubidze N77 streets, Nutsubidze 3 m/r 1 sq.m. N4, 5, 6, 7, 8, 15, 16."
+
+    # street = "tabidze"
+
+    # print(find_near_matches(street, text, max_l_dist=1))

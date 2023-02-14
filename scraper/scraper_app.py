@@ -3,22 +3,23 @@ from gwp_scraper_v1 import scrape_gwp
 from scraper_helpers import get_urls, get_users, Database
 import time, schedule
 def scrape_utilities():
+    print(20*"*")
     print('Starting up webscraper''\n')
     # Establish connection to database through a Database object
     mydb = Database()
-    db_users = get_users(mydb)
+    users = get_users(mydb)
     db_urls = get_urls(mydb)
     print("Scraping GWP")
-    scrape_gwp(mydb, db_users, db_urls)
+    scrape_gwp(mydb, users, db_urls)
     print("Scraping Telasi")
-    scrape_telasi(mydb, db_users, db_urls)
+    scrape_telasi(mydb, users, db_urls)
     print()
     print('Scraping completed''\n')
     mydb.close_connection()
     print()
 
-# Run script every hour
-schedule.every(1).hours.do(scrape_utilities)
+# Run script every ten minutes
+schedule.every(10).minutes.do(scrape_utilities)
 
 
 while 1:
