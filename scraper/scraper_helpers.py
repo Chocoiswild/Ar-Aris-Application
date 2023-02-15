@@ -4,10 +4,14 @@ import  smtplib, ssl, psycopg2
 from deep_translator import GoogleTranslator
 from fuzzysearch import find_near_matches
 from email.message import EmailMessage
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from decouple import config
 from magtifun_oop import MagtiFun
 import hashlib
 import re
+from itsdangerous.url_safe import URLSafeSerializer
+
 
 class Disruption:
     """ A class for containing all information relating to a disruption"""
@@ -30,7 +34,8 @@ class Disruption:
 
 class User:
     """A class for creating User objects"""
-    def __init__(self, name, email, street, district, phone=None):
+    def __init__(self, id, name, email, street, district, phone=None):
+        self.id = id
         self.name = name
         self.email = email
         self.phone = phone
@@ -40,32 +45,82 @@ class User:
         # Just the name of the street itself, e.g. Smith, not Smith st.
         self.streetname = " ".join(street.split(" ")[:-1])
 
-        # A template for generating email text
+        # Templates for generating email and text message content
         self.email_subject = "{utility} outage {disruption_time}: {announcement}"
-        self.email_text = "Hi {name},\n\n{street} has been included in a list of streets affected by a utility disruption in Tbilisi.\nPlease see the following announcement for more details:\n\n{disruption_text}\n\n\nIf you believe you have recieved this email in error, or your street is not included in this disruption, please reply to this email."
+        self.email_text_html = """
+<html>
+    <body>
+        <p>Hi {name},<br><br>
+           <b>{street}</b> has been included in a list of streets affected by a utility disruption in Tbilisi.
+           Please see the following announcement for more details:<br><br>
+           {disruption_text}<br><br>
+           If you believe you have recieved this email in error, or your street is not included in this disruption, please reply to this email.<br><br>
+           <a href="{unsubscribe_link}">Unsubscribe</a> if you no longer wish to recieve disruption notifications.        
+        </p>
+    </body>
+</html>
+"""
+        self.email_text_plaintext = """
+Hi {name},
+
+{street} has been included in a list of streets affected by a utility disruption in Tbilisi.
+Please see the following announcement for more details:
+
+{disruption_text}
+
+If you believe you have recieved this email in error, or your street is not included in this disruption, please reply to this email.
+
+Head on over to the following link if you no longer wish to recieve disruption notifications:
+{unsubscribe_link}
+"""
         self.text_message = "{utility} outage on {street} {disruption_time}:\n{announcement}\nMore info: {url}"
 
-    def generate_communications(self, disruption: Disruption):
-        """Populates email and text message content"""
+
+    def generate_confirmation_token(self):
+        s = URLSafeSerializer(config('ITSDANGEROUS', default=""), salt='unsubscribe')
+
+        return str(s.dumps(self.id))
+    
+    def generate_email_text(self, disruption: Disruption):
+        unsubscribe_link = 'https://www.araris.ge/unsubscribe/{token}'                                            
+        self.unsubscribe_url = unsubscribe_link.format(token=self.generate_confirmation_token())
+
+        # Adjust disruption text for html
+        disruption_text_html = d.text_en.replace("\n", "<br>")
         self.email_subject = self.email_subject.format(
                                     utility=disruption.utility,
                                     announcement=disruption.announcement_en,
                                     disruption_time=disruption.time
                                     )
-        self.email_text = self.email_text.format(
+        self.email_text_html = self.email_text_html.format(
                                     name=self.name, 
                                     street=self.street,
-                                    disruption_text=disruption.text_en
+                                    disruption_text=disruption_text_html,
+                                    unsubscribe_link=self.unsubscribe_url
                                     )
+        self.email_text_plaintext = self.email_text_plaintext.format(
+                                    name=self.name, 
+                                    street=self.street,
+                                    disruption_text=disruption.text_en,
+                                    unsubscribe_link=self.unsubscribe_url
+                                    )
+
+    def generate_text_message(self, disruption: Disruption):
         self.text_message = self.text_message.format(
                                                     utility=disruption.utility, 
                                                     street=self.street, 
                                                     disruption_time=disruption.time, 
                                                     announcement=disruption.announcement_en, 
                                                     url=disruption.url
-                                                     )
+                                                  )
 
+    def generate_communications(self, disruption: Disruption):
+        """Populates email and text message content"""
+
+        self.generate_email_text(disruption)
+        self.generate_text_message(disruption)
         
+
 
 class Database():
     """Connects and handles the various SQL queries"""
@@ -123,6 +178,7 @@ def text_user(user: User):
         print("Authentication unsuccessful")
 
 
+
 def extract_times(disruption_text: str):
     """Extracts and returns the disruption's times, if possible. 
         Otherwise, returns NULL"""
@@ -162,8 +218,9 @@ def get_users(database: Database):
     """Retrieves a list of all users from the DB"""
     sql = "SELECT * FROM users"
     db_users = database.fetch(sql, ())
+    print(db_users)
 
-    return [User(u[1], u[2], u[3], u[4], u[5]) for u in db_users]
+    return [User(u[0], u[1], u[2], u[3], u[4], u[5]) for u in db_users]
 
 
 
@@ -314,22 +371,25 @@ def email_affected_user(user: User):
     print(f"emailing {user.name}")
     # define settings
     port = 465
-    email_sender = config('EMAIL_USER', default='')
-    email_password = config('EMAIL_PW', default='')
+    sender_email = config('EMAIL_USER', default='')
+    sender_password = config('EMAIL_PW', default='')
 
     context = ssl.create_default_context()
-
+    # Generate email message
+    message = MIMEMultipart('alternative')
+    message["subject"] = user.email_subject
+    message["from"] = sender_email
+    message["to"] = user.email
+    # Use MIME multipart for those that only recieve plaintext emails
+    mime1 = MIMEText(user.email_text_plaintext, "plain")
+    mime2 = MIMEText(user.email_text_html, "html")
+    message.attach(mime1)
+    message.attach(mime2)
     with smtplib.SMTP_SSL("smtp.gmail.com", port, context=context) as server:
         # Login to the server
-        server.login(email_sender, email_password)
-        # Generate email message
-        message = EmailMessage()
-        message.set_content(user.email_text)
-        message["subject"] = user.email_subject
-        message["from"] = email_sender
-        message["to"] = user.email
+        server.login(sender_email, sender_password)
         # Send email
-        server.send_message(message)
+        server.sendmail(sender_email, user.email, message.as_string())
         # Cut server connection
         server.close()
 
@@ -410,11 +470,13 @@ if __name__ == "__main__":
     text_ge= "საბურთალოს რაიონი\nგადაუდებელი სამუშაოების გამო 10:00 საათიდან 18:00 საათამდე შეზღუდვა შეეხება: ნუცუბიძის IV მიკრორაიონის, ყაზბეგის გამზირის (ნაწილობრივ), პეკინის გამზირის (ნაწილობრივ), საბურთალოს, თამარაშვილის, ქუთათელაძის, უნივერსიტეტის, ლორთქიფანიძის, ცინცაძის, კუტუზოვის, საირმის, მიცკევიჩის, გამრეკელის, შმიდტის, იოსებიძის, ხვიჩიას, ბახტრიონის, ფანასკერტელ-ციციშვილის, კოსტავას, ცაგარელის და იყალთოს ქუჩების მოსახლეობას.\n გადაუდებელი სამუშაოების გამო 11:00 საათიდან 18:00 საათამდე შეზღუდვა შეეხება: დიდი დიღმის I მიკრორაიონის, პეტრე იბერის, გიორგი ბრწყინვალეს და მეფე მირიანის ქუჩების მოსახლეობას."
     announcement_ge = "სხვადასხვა სამუშაოების ჩატარების გამო 6 თებერვალს ელექტრომომარაგება დროებით შეიზღუდება"
     d = Disruption(text_ge, announcement_ge,"Electricity", "http://www.telasi.ge/ge/power/15698")
-    test_user = User('shash', 'shashwighton@gmail.com', 'ikalto street', 'Saburtalo', '598865300')
+    d.process()
+    test_user = User('1', 'Shash', 'shashwighton@gmail.com', 'Ikalto street', 'Saburtalo', '598865300')
     test_user.generate_communications(d)
-
-    if not test_user.phone == None:
-        text_user(test_user)
+    # print(test_user.id)
+    # if not test_user.phone == None:
+    email_affected_user(test_user)
+        # text_user(test_user)
 
     # text = "Saburtalo district, water supply will be interrupted from 02/13 16:00 to 02/14 01:00 in order to carry out damage restoration works on the water pipeline network on Oseti Street: In Saburtalo district: Mukhran Machavariani, Oseti, Beritashvili streets.In the Vaki district: Amashukeli, Mary Davitashvili, Varden Tsulukidze, Varini and Nutsubidze N77 streets, Nutsubidze 3 m/r 1 sq.m. N4, 5, 6, 7, 8, 15, 16."
 
