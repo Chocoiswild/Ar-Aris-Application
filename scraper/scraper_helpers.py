@@ -218,8 +218,6 @@ def get_users(database: Database):
     """Retrieves a list of all users from the DB"""
     sql = "SELECT * FROM users"
     db_users = database.fetch(sql, ())
-    print(db_users)
-
     return [User(u[0], u[1], u[2], u[3], u[4], u[5]) for u in db_users]
 
 
