@@ -86,7 +86,7 @@ def get_unplanned_tel_disruptions(url: str):
 
     # First line is always the announcement
     announcement = disruption[0].text
-    disruption_text = "".join([d.get_text() for d in disruption[1:]])
+    disruption_text = "\n".join([d.get_text() for d in disruption[1:]])
 
     return [Disruption(disruption_text.strip(), announcement.strip(), "Electricity", url)]
 
@@ -103,14 +103,3 @@ def scrape_telasi(database: Database, users: list, urls: list):
 
 
 if __name__ == "__main__":
-    unplanned, planned = latest_disruption_urls("http://www.telasi.ge/ge/power")
-    for u in planned:
-
-        ds = get_planned_tel_disruptions(u)
-        for d in ds:
-            print(d.announcement_ge)
-            print(d.url)
-            print(len(d.text_ge))
-
-        print(50*"*")
-

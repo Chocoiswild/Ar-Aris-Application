@@ -50,7 +50,7 @@ def get_unplanned_gwp_disruptions(url: str):
     soup = BeautifulSoup(text, "html.parser")
     
     # Get the announcement for all disruptions
-    announcement = soup.select_one("p.media-heading").select_one("span").get_text()
+    announcement = soup.select_one("p.media-heading").get_text()
 
     # extract a PageElement of only the disruptions, which are found in <div class="initial">
     # selects only the list tags, each <li> contains a separate disruption:
@@ -77,13 +77,3 @@ def scrape_gwp(database: Database, users: list, urls: list):
 
 
 if __name__ == "__main__":
-    unplanned = latest_disruption_urls("https://www.gwp.ge/ka/gadaudebeli")
-    for u in unplanned:
-
-        ds = get_unplanned_gwp_disruptions(u)
-        for d in ds:
-            print(d.announcement_en)
-            print(d.url)
-            print(len(d.text_ge))
-
-        print(50*"*")

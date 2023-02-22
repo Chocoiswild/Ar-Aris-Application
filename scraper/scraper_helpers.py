@@ -1,16 +1,14 @@
-# Helper functions for the Ar Aris scraper.
-
-import  smtplib, ssl, psycopg2
+import  smtplib, ssl, psycopg2, hashlib, re
 from deep_translator import GoogleTranslator
 from fuzzysearch import find_near_matches
-from email.message import EmailMessage
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from decouple import config
 from magtifun_oop import MagtiFun
-import hashlib
-import re
 from itsdangerous.url_safe import URLSafeSerializer
+
+"""All helper functions and classes for the GWP, Telasi 
+and overall Ar Aris applications are within this script"""
 
 
 class Disruption:
@@ -34,11 +32,14 @@ class Disruption:
 
 class User:
     """A class for creating User objects"""
-    def __init__(self, id, name, email, street, district, phone=None):
+    def __init__(self, id, name, email, street, district, phone, email_confirmed, preference, phone_confirmed):
         self.id = id
         self.name = name
         self.email = email
         self.phone = phone
+        self.email_confirmed = email_confirmed
+        self.phone_confirmed = phone_confirmed
+        self.preference = preference
         # The full street name, e.g. Smith St.
         self.street = street
         self.district = district
@@ -47,7 +48,7 @@ class User:
 
         # Templates for generating email and text message content
         self.email_subject = "{utility} outage {disruption_time}: {announcement}"
-        self.email_text_html = """
+        self.email_text_html = """\
 <html>
     <body>
         <p>Hi {name},<br><br>
@@ -60,7 +61,7 @@ class User:
     </body>
 </html>
 """
-        self.email_text_plaintext = """
+        self.email_text_plaintext = """\
 Hi {name},
 
 {street} has been included in a list of streets affected by a utility disruption in Tbilisi.
@@ -71,7 +72,7 @@ Please see the following announcement for more details:
 If you believe you have recieved this email in error, or your street is not included in this disruption, please reply to this email.
 
 Head on over to the following link if you no longer wish to recieve disruption notifications:
-{unsubscribe_link}
+{unsubscribe_link}\
 """
         self.text_message = "{utility} outage on {street} {disruption_time}:\n{announcement}\nMore info: {url}"
 
@@ -86,7 +87,7 @@ Head on over to the following link if you no longer wish to recieve disruption n
         self.unsubscribe_url = unsubscribe_link.format(token=self.generate_confirmation_token())
 
         # Adjust disruption text for html
-        disruption_text_html = d.text_en.replace("\n", "<br>")
+        disruption_text_html = disruption.text_en.replace("\n", "<br>")
         self.email_subject = self.email_subject.format(
                                     utility=disruption.utility,
                                     announcement=disruption.announcement_en,
@@ -157,28 +158,6 @@ class Database():
 
 
 
-def text_user(user: User):
-    """Texts a disruption notification to a user"""
-    m = MagtiFun(username=config('M_USER', default=''),
-                              password=config('M_PW', default=''))
-    print(f"texting {user.name}")
-    if m.login():
-        print("Authentication successful")
-
-        m.get_balance()
-        print("balance:", m.balance)
-
-        if m.send_messages(user.phone, user.text_message):
-            print("All messages sent successfully")
-        else:
-            print("Some messages could not be sent. Check the log for more details")
-            print(m.log_file)
-
-    else:
-        print("Authentication unsuccessful")
-
-
-
 def extract_times(disruption_text: str):
     """Extracts and returns the disruption's times, if possible. 
         Otherwise, returns NULL"""
@@ -218,7 +197,7 @@ def get_users(database: Database):
     """Retrieves a list of all users from the DB"""
     sql = "SELECT * FROM users"
     db_users = database.fetch(sql, ())
-    return [User(u[0], u[1], u[2], u[3], u[4], u[5]) for u in db_users]
+    return [User(u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7], u[8]) for u in db_users]
 
 
 
@@ -270,7 +249,18 @@ def save_url(database: Database, url: str, hash: str, url_exists: bool):
         sql = "INSERT INTO urls (hash, url) VALUES (%s, %s)"
     database.save(sql, (hash, url))
 
+def translate_by_chunks(translator: GoogleTranslator, text: str, separator: str):
+    """Breaks a text into workable chunks,
+        translates them, returns translated joined text"""
+    split_text = text.split(separator)
+    # print(split_text)
+    chunks = [split_text[x:x+60] for x in range(0, len(split_text), 60)] 
+    translated_text = ""
+    for chunk in chunks:
+        joined = ", ".join(chunk)
+        translated_text += (translator.translate(joined))
 
+    return translated_text
 
 def translate_disruption(disruption: Disruption):
     """Translates given disruption's annoucement and text to English"""
@@ -281,31 +271,27 @@ def translate_disruption(disruption: Disruption):
     if len(disruption.text_ge) > 2000:
         # Telasi and GWP's texts are formatted differently, 
         # so they need to be broken up in different ways for translation.
-        # For Telasi
-        if "ელ.მომარაგების" in disruption.text_ge or "ელექტრო" in disruption.text_ge:
-            # Telasi texts are often long, so break into paragraphs
-            # and then translate sentences within paragraphs.
+        # The following keywords are found within all Telasi disruption announcements
+        if "ელ.მომარაგების" in disruption.announcement_ge or "ელექტრო" in disruption.announcement_ge:
+            # Telasi texts are often long, so translate a paragraph at a time
             paragraphs = disruption.text_ge.split("\n")
             translated_paragraphs = []
             for p in paragraphs:
-                # Then into sentences, then translate
-                sentences = p.split(". ")
-                translated_sentences = translator.translate_batch(sentences)
-                translated_p = "".join(translated_sentences)
+                # If the p length is too great, translate it by chunks
+                if len(p) > 3000:
+                    # These long paragraphs are just long lists of streets, 
+                    # so splitting at commas is OK.
+                    translated_p = translate_by_chunks(translator, p, ",")
+                else:
+                    translated_p = translator.translate(p)
                 translated_paragraphs.append(translated_p)
             # Text is joined together at end
             translated_disruption_text = "\n\n".join(translated_paragraphs)
 
         else:
-            # For GWP
-            text = disruption.text_ge.split(", ")
             # GWP texts are not as long, and their formatting allows a text to
-            # be split into groups of 60 words which are translated.
-            chunks = [text[x:x+60] for x in range(0, len(text), 60)] 
-            translated_disruption_text = ""
-            for chunk in chunks:
-                joined = ", ".join(chunk)
-                translated_disruption_text += (translator.translate(joined))
+            # translated by chunks
+            translated_disruption_text = translate_by_chunks(translator, disruption.text_ge, ", ")
     # If the text is short enough it's translated in one go.
     else: 
         translated_disruption_text = translator.translate(disruption.text_ge)
@@ -364,32 +350,70 @@ def find_affected_users(disruption: Disruption, users: list):
 
 
 
+def text_user(user: User):
+    """Texts a disruption notification to a user"""
+    # Only texts user if they've confirmed they want texts
+    if user.phone_confirmed == True:
+        print(f"Texting {user.name}")
+        m = MagtiFun(username=config('M_USER', default=''),
+                                password=config('M_PW', default=''))
+        if m.login():
+            print("Authentication successful")
+
+            m.get_balance()
+            print("balance:", m.balance)
+
+            if m.send_messages(user.phone, user.text_message):
+                print("All messages sent successfully")
+            else:
+                print("Some messages could not be sent. Check the log for more details")
+                print(m.log_file)
+
+        else:
+            print("Authentication unsuccessful")
+
+
+
 def email_affected_user(user: User):
     """ Emails the disruption notification to affected users """
-    print(f"emailing {user.name}")
-    # define settings
-    port = 465
-    sender_email = config('EMAIL_USER', default='')
-    sender_password = config('EMAIL_PW', default='')
+    if user.email_confirmed == True:
+        print(f"Emailing {user.name}")
+        # define settings
+        port = 465
+        sender_email = config('EMAIL_USER', default='')
+        sender_password = config('EMAIL_PW', default='')
 
-    context = ssl.create_default_context()
-    # Generate email message
-    message = MIMEMultipart('alternative')
-    message["subject"] = user.email_subject
-    message["from"] = sender_email
-    message["to"] = user.email
-    # Use MIME multipart for those that only recieve plaintext emails
-    mime1 = MIMEText(user.email_text_plaintext, "plain")
-    mime2 = MIMEText(user.email_text_html, "html")
-    message.attach(mime1)
-    message.attach(mime2)
-    with smtplib.SMTP_SSL("smtp.gmail.com", port, context=context) as server:
-        # Login to the server
-        server.login(sender_email, sender_password)
-        # Send email
-        server.sendmail(sender_email, user.email, message.as_string())
-        # Cut server connection
-        server.close()
+        context = ssl.create_default_context()
+        # Generate email message
+        message = MIMEMultipart('alternative')
+        message["subject"] = user.email_subject
+        message["from"] = sender_email
+        message["to"] = user.email
+        # Use MIME multipart for those that only recieve plaintext emails
+        mime1 = MIMEText(user.email_text_plaintext, "plain")
+        mime2 = MIMEText(user.email_text_html, "html")
+        message.attach(mime1)
+        message.attach(mime2)
+        with smtplib.SMTP_SSL("smtp.gmail.com", port, context=context) as server:
+            # Login to the server
+            server.login(sender_email, sender_password)
+            # Send email
+            server.sendmail(sender_email, user.email, message.as_string())
+            # Cut server connection
+            server.close()
+
+
+
+def notify_user(user):
+    """Sends disruption notifications to affected users
+        based on their notification preferences"""
+    if user.preference == "both":
+        email_affected_user(user)
+        text_user(user)
+    elif user.preference == "text":
+        text_user(user)
+    else:
+        email_affected_user(user)
 
 
 
@@ -414,14 +438,9 @@ def process_disruptions(database: Database, url: str, disruptions: list,
             # Translate disruption to English, extract disruption times
             d.process()
             # Find users affected by disruption
-            affected_users = find_affected_users(d, users)
+            for user in find_affected_users(d, users):
+                notify_user(user)
 
-            # Email affected users
-            for user in affected_users:
-                # If phone saved, user wants texts
-                if not user.phone == None:  
-                    text_user(user)
-                email_affected_user(user)
             # Save translated disruption text to database
             save_disruption(database, d)
 
@@ -469,11 +488,11 @@ if __name__ == "__main__":
     announcement_ge = "სხვადასხვა სამუშაოების ჩატარების გამო 6 თებერვალს ელექტრომომარაგება დროებით შეიზღუდება"
     d = Disruption(text_ge, announcement_ge,"Electricity", "http://www.telasi.ge/ge/power/15698")
     d.process()
-    test_user = User('1', 'Shash', 'shashwighton@gmail.com', 'Ikalto street', 'Saburtalo', '598865300')
-    test_user.generate_communications(d)
+    test_user = [User('1', 'Shash', 'shashwighton@gmail.com', 'Ikalto street', 'Saburtalo', '598865300', True, "both", True)]
+    test_user[0].generate_communications(d)
     # print(test_user.id)
     # if not test_user.phone == None:
-    email_affected_user(test_user)
+    notify_user(test_user)
         # text_user(test_user)
 
     # text = "Saburtalo district, water supply will be interrupted from 02/13 16:00 to 02/14 01:00 in order to carry out damage restoration works on the water pipeline network on Oseti Street: In Saburtalo district: Mukhran Machavariani, Oseti, Beritashvili streets.In the Vaki district: Amashukeli, Mary Davitashvili, Varden Tsulukidze, Varini and Nutsubidze N77 streets, Nutsubidze 3 m/r 1 sq.m. N4, 5, 6, 7, 8, 15, 16."
