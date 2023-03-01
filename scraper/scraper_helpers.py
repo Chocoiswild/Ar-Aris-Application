@@ -380,14 +380,14 @@ def email_affected_user(user: User):
         print(f"Emailing {user.name}")
         # define settings
         port = 465
-        sender_email = config('EMAIL_USER', default='')
-        sender_password = config('EMAIL_PW', default='')
+        email_login = config('EMAIL_USER', default='')
+        email_password = config('EMAIL_PW', default='')
 
         context = ssl.create_default_context()
         # Generate email message
         message = MIMEMultipart('alternative')
         message["subject"] = user.email_subject
-        message["from"] = sender_email
+        message["from"] = "disruptions@araris.ge"
         message["to"] = user.email
         # Use MIME multipart for those that only recieve plaintext emails
         mime1 = MIMEText(user.email_text_plaintext, "plain")
@@ -396,9 +396,9 @@ def email_affected_user(user: User):
         message.attach(mime2)
         with smtplib.SMTP_SSL("smtp.gmail.com", port, context=context) as server:
             # Login to the server
-            server.login(sender_email, sender_password)
+            server.login(email_login, email_password)
             # Send email
-            server.sendmail(sender_email, user.email, message.as_string())
+            server.sendmail(message["from"], message["to"], message.as_string())
             # Cut server connection
             server.close()
 
@@ -484,19 +484,41 @@ def scrape_and_save(database: Database, disruption_urls: list, disruption_func,
 
 
 if __name__ == "__main__":
-    text_ge= "საბურთალოს რაიონი\nგადაუდებელი სამუშაოების გამო 10:00 საათიდან 18:00 საათამდე შეზღუდვა შეეხება: ნუცუბიძის IV მიკრორაიონის, ყაზბეგის გამზირის (ნაწილობრივ), პეკინის გამზირის (ნაწილობრივ), საბურთალოს, თამარაშვილის, ქუთათელაძის, უნივერსიტეტის, ლორთქიფანიძის, ცინცაძის, კუტუზოვის, საირმის, მიცკევიჩის, გამრეკელის, შმიდტის, იოსებიძის, ხვიჩიას, ბახტრიონის, ფანასკერტელ-ციციშვილის, კოსტავას, ცაგარელის და იყალთოს ქუჩების მოსახლეობას.\n გადაუდებელი სამუშაოების გამო 11:00 საათიდან 18:00 საათამდე შეზღუდვა შეეხება: დიდი დიღმის I მიკრორაიონის, პეტრე იბერის, გიორგი ბრწყინვალეს და მეფე მირიანის ქუჩების მოსახლეობას."
-    announcement_ge = "სხვადასხვა სამუშაოების ჩატარების გამო 6 თებერვალს ელექტრომომარაგება დროებით შეიზღუდება"
-    d = Disruption(text_ge, announcement_ge,"Electricity", "http://www.telasi.ge/ge/power/15698")
-    d.process()
-    test_user = [User('1', 'Shash', 'shashwighton@gmail.com', 'Ikalto street', 'Saburtalo', '598865300', True, "both", True)]
-    test_user[0].generate_communications(d)
-    # print(test_user.id)
-    # if not test_user.phone == None:
-    notify_user(test_user)
-        # text_user(test_user)
+    # text_ge= "საბურთალოს რაიონი\nგადაუდებელი სამუშაოების გამო 10:00 საათიდან 18:00 საათამდე შეზღუდვა შეეხება: ნუცუბიძის IV მიკრორაიონის, ყაზბეგის გამზირის (ნაწილობრივ), პეკინის გამზირის (ნაწილობრივ), საბურთალოს, თამარაშვილის, ქუთათელაძის, უნივერსიტეტის, ლორთქიფანიძის, ცინცაძის, კუტუზოვის, საირმის, მიცკევიჩის, გამრეკელის, შმიდტის, იოსებიძის, ხვიჩიას, ბახტრიონის, ფანასკერტელ-ციციშვილის, კოსტავას, ცაგარელის და იყალთოს ქუჩების მოსახლეობას.\n გადაუდებელი სამუშაოების გამო 11:00 საათიდან 18:00 საათამდე შეზღუდვა შეეხება: დიდი დიღმის I მიკრორაიონის, პეტრე იბერის, გიორგი ბრწყინვალეს და მეფე მირიანის ქუჩების მოსახლეობას."
+    # announcement_ge = "სხვადასხვა სამუშაოების ჩატარების გამო 6 თებერვალს ელექტრომომარაგება დროებით შეიზღუდება"
+    # d = Disruption(text_ge, announcement_ge,"Electricity", "http://www.telasi.ge/ge/power/15698")
+    # d.process()
+    # test_user = [User('1', 'Shash', 'shashwighton@gmail.com', 'Ikalto street', 'Saburtalo', '598865300', True, "both", True)]
+    # test_user[0].generate_communications(d)
+    # # print(test_user.id)
+    # # if not test_user.phone == None:
+    # notify_user(test_user)
 
-    # text = "Saburtalo district, water supply will be interrupted from 02/13 16:00 to 02/14 01:00 in order to carry out damage restoration works on the water pipeline network on Oseti Street: In Saburtalo district: Mukhran Machavariani, Oseti, Beritashvili streets.In the Vaki district: Amashukeli, Mary Davitashvili, Varden Tsulukidze, Varini and Nutsubidze N77 streets, Nutsubidze 3 m/r 1 sq.m. N4, 5, 6, 7, 8, 15, 16."
 
-    # street = "tabidze"
+    port = 465
+    email_login = config('EMAIL_USER', default='')
+    email_password = config('EMAIL_PW', default='')
 
-    # print(find_near_matches(street, text, max_l_dist=1))
+
+
+
+
+
+
+
+    context = ssl.create_default_context()
+    # Generate email message
+    message = MIMEMultipart('alternative')
+    message["subject"] = "testy"
+    message["from"] = "disruptions@araris.ge"
+    message["to"] = "shashwighton@gmail.com"
+    # Use MIME multipart for those that only recieve plaintext emails
+    mime1 = MIMEText("testyyy", "plain")
+    message.attach(mime1)
+    with smtplib.SMTP_SSL("smtp.gmail.com", port, context=context) as server:
+        # Login to the server
+        server.login(email_login, email_password)
+        # Send email
+        server.sendmail(message["from"], message["to"], message.as_string())
+        # Cut server connection
+        server.close()

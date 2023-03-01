@@ -103,3 +103,4 @@ def scrape_telasi(database: Database, users: list, urls: list):
 
 
 if __name__ == "__main__":
+    pass
